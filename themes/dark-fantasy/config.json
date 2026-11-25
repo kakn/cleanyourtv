@@ -1,0 +1,8 @@
+{
+  "wallpaper": true,
+  "wallpaper_rotation_minutes": 1,
+  "wallpaper_order": "shuffle",
+  "wallpaper_dim": 0,
+  "wallpaper_true_color": true,
+  "dock_glass": true
+}
