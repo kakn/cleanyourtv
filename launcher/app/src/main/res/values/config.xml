@@ -395,6 +395,10 @@
     <!-- Wallpapers decode as RGB_565 (2 bytes a pixel, 4 MB at 1080p), which bands dark gradients such as a night
          sky, most of all under wallpaper_dim. true decodes them in 32-bit colour: 8 MB, for TVs with 2 GB or more. -->
     <bool name="wallpaper_true_color">false</bool>
+    <!-- Rotating wallpapers: crossfade from one picture to the next over this many milliseconds (up to 5000) instead
+         of cutting. Only the outgoing picture's view animates, and only while the change runs. 0 (the default) keeps
+         the cut; animations off or reduced_motion also keep it. -->
+    <integer name="wallpaper_fade_ms">0</integer>
     <!-- Rotating wallpapers: show each picture's name under the top-right buttons, from a captions.txt next to the
          pictures in wallpapers/ ("01-dusk.jpg<TAB>Dusk over the peaks", one per line). A picture without a line
          shows no name. Can also be set with "wallpaper_captions": true in a theme's config.json. -->

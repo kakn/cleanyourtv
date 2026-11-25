@@ -48,6 +48,15 @@ final class WallpaperPlayer {
     private final int dimColor;
     /** The picture on screen, released once the next one has been drawn. */
     private Bitmap current;
+    /**
+     * config.xml wallpaper_fade_ms: a rotation change crossfades over this many milliseconds instead of cutting.
+     * 0 (the default), animations off or reduced_motion keeps the cut. The outgoing picture sits in {@link #fade},
+     * one view above {@link #image}, and only that view animates, only while a change runs.
+     */
+    private final int fadeMs;
+    private final ImageView fade;
+    /** The outgoing picture while {@link #fade} shows it, released when its fade ends or a newer change takes over. */
+    private Bitmap fading;
     private boolean active;
     private boolean closed;
     private boolean loading;
@@ -93,10 +102,24 @@ final class WallpaperPlayer {
         names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
                 ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
         caption = names.isEmpty() ? null : makeCaption(context, root);
+        int fadeSetting = context.getResources().getInteger(R.integer.wallpaper_fade_ms);
+        fadeMs = config.animations && !config.reducedMotion && files.size() > 1 ? Math.max(0, Math.min(5000, fadeSetting)) : 0;
         if (config.wallpaperEnabled && !files.isEmpty()) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            if (fadeMs > 0) {
+                fade = new ImageView(context);
+                fade.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                fade.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                fade.setVisibility(View.GONE);
+                root.addView(fade, 1, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            } else {
+                fade = null;
+            }
             showFirst();
+        } else {
+            fade = null;
         }
     }
 
@@ -143,6 +166,12 @@ final class WallpaperPlayer {
     void releaseForMemoryPressure() {
         if (current == null) return;
         image.setImageDrawable(null);
+        if (fade != null) {
+            fade.animate().cancel();
+            fade.setVisibility(View.GONE);
+            fade.setImageDrawable(null);
+            fading = null;
+        }
         // The renderer may still have a queued frame that references this hardware bitmap. Drop our references and
         // let Android reclaim its native buffer after rendering releases it instead of recycling it mid-frame.
         current = null;
@@ -289,6 +318,25 @@ final class WallpaperPlayer {
         current = bitmap;
         // The wallpaper covers the whole root; avoid drawing the fallback colour under it.
         root.setBackground(null);
+        if (fade != null && old != null && old != bitmap && image.isShown()) {
+            // wallpaper_fade_ms: the outgoing picture goes on top and fades away over the incoming one.
+            fade.animate().cancel();
+            Bitmap previous = fading;
+            fading = old;
+            fade.setImageBitmap(old);
+            fade.setAlpha(1f);
+            fade.setVisibility(View.VISIBLE);
+            image.setImageBitmap(bitmap);
+            if (previous != null && previous != bitmap) image.postDelayed(previous::recycle, 500);
+            fade.animate().alpha(0f).setDuration(fadeMs).withEndAction(() -> {
+                if (fading != old) return;
+                fade.setVisibility(View.GONE);
+                fade.setImageDrawable(null);
+                fading = null;
+                image.postDelayed(old::recycle, 500);
+            }).start();
+            return;
+        }
         image.setImageBitmap(bitmap);
         if (old != null && old != bitmap) image.postDelayed(old::recycle, 500);
     }
